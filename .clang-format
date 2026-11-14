@@ -1,0 +1,15 @@
+BasedOnStyle: Google
+Standard: c++11
+ColumnLimit: 80
+IndentWidth: 2
+InsertBraces: true
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '^<(assert|ctype|errno|float|limits|math|stddef|stdint|stdio|stdlib|string)\.h>$'
+    Priority: 1
+  - Regex: '^<[^./]+>$'
+    Priority: 2
+  - Regex: '^<.*>$'
+    Priority: 3
+  - Regex: '.*'
+    Priority: 4

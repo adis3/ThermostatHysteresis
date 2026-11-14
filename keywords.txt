@@ -1,0 +1,14 @@
+# Arduino IDE syntax coloring. Columns are separated by real tabs.
+ThermostatHysteresis	KEYWORD1		
+State	KEYWORD1		
+Callback	KEYWORD1		
+Begin	KEYWORD2		
+Update	KEYWORD2		
+GetConfig	KEYWORD2		
+GetState	KEYWORD2		
+GetStatus	KEYWORD2		
+SetConfig	KEYWORD2		
+IsValidConfig	KEYWORD2		
+OnUpdate	KEYWORD2		
+RemoveUpdateCallback	KEYWORD2		
+ClearCallbacks	KEYWORD2		
