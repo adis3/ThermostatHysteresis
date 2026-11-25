@@ -59,7 +59,7 @@ void PrintStatus() {
   Serial.print(F(", output="));
   Serial.print(state.output ? F("ON") : F("OFF"));
   Serial.print(F(", LED bit="));
-  Serial.println(g_led_output->Get() ? F("HIGH") : F("LOW"));
+  Serial.println(g_led_output->Get() ? F("ON") : F("OFF"));
 }
 
 void OnThermostatUpdate(const ThermostatHysteresis&,
@@ -94,7 +94,6 @@ bool StartDemo(uint32_t now_ms) {
   config.initial_demand = false;
   config.initial_output = false;
   config.error_output = true;
-  config.invert_output = kInvertOutput;
 
   if (!g_thermostat->SetConfig(config) || !g_temperature->Begin()) {
     return false;
@@ -223,7 +222,7 @@ void setup() {
   // Zero interval: acquire only when this demo explicitly calls Update().
   static TemperatureFake sensor(&logger, "Room", 0);
   static BitRegisterIOAdapter led(
-      LED_BUILTIN, BitRegisterIOAdapter::OUTPUT_MODE, &logger, "LED");
+      LED_BUILTIN, BitRegisterIOAdapter::OUTPUT_MODE, &logger, "LED", kInvertOutput);
   static ThermostatHysteresis controller(sensor, led, &logger, "Heating");
 
   g_temperature = &sensor;

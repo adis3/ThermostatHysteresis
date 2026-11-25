@@ -56,7 +56,7 @@ bool ThermostatHysteresis::SameConfig(const Config& a, const Config& b) {
          a.startup_test_seconds == b.startup_test_seconds &&
          a.initial_demand == b.initial_demand &&
          a.initial_output == b.initial_output &&
-         a.error_output == b.error_output && a.invert_output == b.invert_output;
+         a.error_output == b.error_output;
 }
 
 bool ThermostatHysteresis::SetConfig(const Config& config) {
@@ -281,7 +281,7 @@ void ThermostatHysteresis::Publish(const State& previous, bool force,
   // State and callback snapshot are committed before Set(), which can invoke
   // application callbacks synchronously. All output paths share this mapping.
   if (write_output) {
-    output_.Set(snapshot.output != config_.invert_output);
+    output_.Set(snapshot.output);
   }
   if (!notify) {
     return;

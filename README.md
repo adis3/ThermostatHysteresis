@@ -50,7 +50,6 @@ Common settings are documented in the base library. Variant settings are:
 | initial_demand | false | Initial/recovered hysteresis memory inside the band |
 | initial_output | false | Logical output applied by Begin() |
 | error_output | false | Logical output on unusable input |
-| invert_output | false | Invert the value written to the adapter |
 
 Temperatures must be finite, hysteresis nonnegative, and threshold arithmetic
 finite. All durations are seconds and must not exceed
@@ -97,11 +96,11 @@ Disabled forces logical OFF. Missing, unhealthy, or stale input applies
 error_output without transition delays. Recovery immediately evaluates demand
 from initial_demand and starts the full applicable transition delay.
 
-All settings/state are logical: true requests ON. Every output path uses one
-mapping: adapter.Set(logical_output != invert_output). The adapter's Get() and
-callbacks describe the mapped bit, not measured equipment feedback. Its current
-constructor-time LOW behavior is unchanged; initial_output/inversion take effect
-when thermostat Begin() runs.
+All settings/state are logical: true requests ON. Every output path calls
+adapter.Set(logical_output). Configure active-low physical outputs with the
+adapter constructor's final invert_output argument. The adapter's Get() and
+callbacks also report logical values, not measured equipment feedback. Physical
+outputs start logical OFF when constructed; Begin() applies initial_output.
 
 ## State, observers, and clock
 
@@ -174,7 +173,7 @@ The include remains ThermostatHysteresis.h. Methods retain their names.
 | turnOnDelaySeconds / turnOffDelaySeconds | turn_on_delay_seconds / turn_off_delay_seconds |
 | startupTestSeconds | startup_test_seconds |
 | initialDemand / initialOutput | initial_demand / initial_output |
-| errorOutput / invertOutput | error_output / invert_output |
+| errorOutput | error_output |
 | startupTesting | startup_testing |
 | outputChangedAtSeconds | output_changed_at_seconds |
 
@@ -191,3 +190,7 @@ API classes, AVR-compatible C headers, and C++11 are explicit platform conventio
 keywords.txt uses real tab-separated columns. library.properties identifies this
 package and depends on ThermostatBase instead of bundling its implementation.
 The project URL is blank until a repository URL is assigned.
+
+Output polarity has moved from ThermostatHysteresis::Config::invert_output to
+the final BitRegisterIOAdapter physical constructor argument. Remove the former
+setting and construct active-low outputs with (pin, OUTPUT_MODE, logger, name, true).

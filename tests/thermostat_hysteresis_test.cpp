@@ -49,9 +49,9 @@ class TestLogger final : public ILogger {
 };
 class Fixture {
  public:
-  Fixture()
+  Fixture(bool inverted = false)
       : sensor_(&logger_, "sensor", 0),
-        bit_(false, &logger_, "bit"),
+        bit_(9, BitRegisterIOAdapter::OUTPUT_MODE, &logger_, "bit", inverted),
         thermostat_(sensor_, bit_, &logger_, "thermostat") {
     THERMOSTAT_HYSTERESIS_TEST_CHECK(sensor_.Begin());
     Thermostat::Config config;
@@ -102,17 +102,17 @@ void TestAdapterValidation() {
   BitRegisterIOAdapter hardware(8, BitRegisterIOAdapter::OUTPUT_MODE);
   Thermostat valid(sensor, hardware);
   THERMOSTAT_HYSTERESIS_TEST_CHECK(valid.Begin(0));
-  Fixture virtual_output;
-  THERMOSTAT_HYSTERESIS_TEST_CHECK(virtual_output.thermostat().Begin(0));
+  BitRegisterIOAdapter virtual_bit(false);
+  Thermostat virtual_output(sensor, virtual_bit);
+  THERMOSTAT_HYSTERESIS_TEST_CHECK(virtual_output.Begin(0));
   ++g_test_group_count;
 }
-void TestInitialAndInversion() {
+void TestInitialAndAdapterPolarity() {
   for (int initial = 0; initial < 2; ++initial) {
     for (int invert = 0; invert < 2; ++invert) {
-      Fixture fixture;
+      Fixture fixture(invert != 0);
       auto config = fixture.thermostat().GetConfig();
       config.initial_output = initial != 0;
-      config.invert_output = invert != 0;
       THERMOSTAT_HYSTERESIS_TEST_CHECK(fixture.thermostat().SetConfig(config));
       THERMOSTAT_HYSTERESIS_TEST_CHECK(fixture.thermostat().Begin(1234));
       auto state = fixture.thermostat().GetState();
@@ -121,12 +121,14 @@ void TestInitialAndInversion() {
       THERMOSTAT_HYSTERESIS_TEST_CHECK(state.output_changed_at_seconds == 1);
       THERMOSTAT_HYSTERESIS_TEST_CHECK(
           fixture.bit().Get() ==
-          (config.initial_output != config.invert_output));
+          config.initial_output);
+      THERMOSTAT_HYSTERESIS_TEST_CHECK(g_pin_levels[9] ==
+          ((config.initial_output != (invert != 0)) ? HIGH : LOW));
       fixture.thermostat().Update(1234);
       THERMOSTAT_HYSTERESIS_TEST_CHECK(fixture.thermostat().GetStatus() ==
                                        Status::kNoData);
       THERMOSTAT_HYSTERESIS_TEST_CHECK(fixture.bit().Get() ==
-                                       config.invert_output);
+                                       false);
       THERMOSTAT_HYSTERESIS_TEST_CHECK(fixture.thermostat().Begin(2000));
       THERMOSTAT_HYSTERESIS_TEST_CHECK(fixture.thermostat().GetState().output ==
                                        config.initial_output);
@@ -205,11 +207,10 @@ void TestExpiryRechecksInput() {
 }
 void TestFaultAndRecovery() {
   for (int inverted = 0; inverted < 2; ++inverted) {
-    Fixture fixture;
+    Fixture fixture(inverted != 0);
     auto config = fixture.thermostat().GetConfig();
     config.turn_on_delay_seconds = 2;
     config.turn_off_delay_seconds = 2;
-    config.invert_output = inverted != 0;
     THERMOSTAT_HYSTERESIS_TEST_CHECK(fixture.thermostat().SetConfig(config));
     fixture.Start(19);
     THERMOSTAT_HYSTERESIS_TEST_CHECK(
@@ -221,7 +222,7 @@ void TestFaultAndRecovery() {
     THERMOSTAT_HYSTERESIS_TEST_CHECK(!fixture.thermostat().GetState().output &&
                                      !fixture.thermostat().GetState().pending);
     THERMOSTAT_HYSTERESIS_TEST_CHECK(fixture.bit().Get() ==
-                                     config.invert_output);
+                                     false);
     fixture.Tick(19, 3000);
     THERMOSTAT_HYSTERESIS_TEST_CHECK(fixture.thermostat().GetState().pending);
     fixture.Tick(19, 4999);
@@ -295,7 +296,7 @@ void TestConfiguration() {
   THERMOSTAT_HYSTERESIS_TEST_CHECK(!base.SetTargetC(NAN));
   ++g_test_group_count;
 }
-void TestSetpointMemoryAndInversionChange() {
+void TestSetpointMemoryAndDisable() {
   Fixture fixture;
   fixture.Start(19);
   THERMOSTAT_HYSTERESIS_TEST_CHECK(fixture.thermostat().SetTargetC(21.1f));
@@ -304,17 +305,16 @@ void TestSetpointMemoryAndInversionChange() {
                                    fixture.bit().Get());
 
   auto config = fixture.thermostat().GetConfig();
-  config.invert_output = true;
   THERMOSTAT_HYSTERESIS_TEST_CHECK(fixture.thermostat().SetConfig(config));
   fixture.Tick(21.1f, 1001);
   THERMOSTAT_HYSTERESIS_TEST_CHECK(fixture.thermostat().GetState().output &&
-                                   !fixture.bit().Get());
+                                   fixture.bit().Get());
   THERMOSTAT_HYSTERESIS_TEST_CHECK(fixture.thermostat().SetEnabled(false));
   fixture.thermostat().Update(1002);
   THERMOSTAT_HYSTERESIS_TEST_CHECK(fixture.thermostat().GetStatus() ==
                                    Status::kDisabled);
   THERMOSTAT_HYSTERESIS_TEST_CHECK(!fixture.thermostat().GetState().output &&
-                                   fixture.bit().Get());
+                                   !fixture.bit().Get());
   ++g_test_group_count;
 }
 void TestStartup() {
@@ -412,7 +412,7 @@ void RawObserver(bool raw, uint8_t) {
   ++g_raw_callback_count;
   const auto state = g_raw_thermostat->GetState();
   THERMOSTAT_HYSTERESIS_TEST_CHECK(
-      raw == (state.output != g_raw_thermostat->GetConfig().invert_output));
+      raw == state.output);
   THERMOSTAT_HYSTERESIS_TEST_CHECK(!state.pending);
   THERMOSTAT_HYSTERESIS_TEST_CHECK(!g_raw_thermostat->SetEnabled(false));
   THERMOSTAT_HYSTERESIS_TEST_CHECK(!g_raw_thermostat->Begin(0));
@@ -420,13 +420,12 @@ void RawObserver(bool raw, uint8_t) {
 void TestAdapterReentry() {
   Fixture fixture;
   auto config = fixture.thermostat().GetConfig();
-  config.invert_output = true;
   THERMOSTAT_HYSTERESIS_TEST_CHECK(fixture.thermostat().SetConfig(config));
   g_raw_thermostat = &fixture.thermostat();
   g_raw_callback_count = 0;
   THERMOSTAT_HYSTERESIS_TEST_CHECK(fixture.bit().OnStateChange(RawObserver));
   fixture.Start(19);
-  THERMOSTAT_HYSTERESIS_TEST_CHECK(g_raw_callback_count == 2);
+  THERMOSTAT_HYSTERESIS_TEST_CHECK(g_raw_callback_count == 1);
   fixture.bit().ClearCallbacks();
   g_raw_thermostat = nullptr;
   ++g_test_group_count;
@@ -508,7 +507,6 @@ void TestCommonConfigurationAndFaultPrecedence() {
   auto config = fixture.thermostat().GetConfig();
   config.hysteresis_c = 2.0f;
   config.error_output = true;
-  config.invert_output = true;
   THERMOSTAT_HYSTERESIS_TEST_CHECK(fixture.thermostat().SetConfig(config));
   fixture.Start(19.0f);
   ThermostatBase& base = fixture.thermostat();
@@ -517,8 +515,6 @@ void TestCommonConfigurationAndFaultPrecedence() {
   THERMOSTAT_HYSTERESIS_TEST_CHECK(base.SetConfig(common));
   THERMOSTAT_HYSTERESIS_TEST_CHECK(
       fixture.thermostat().GetConfig().hysteresis_c == 2.0f);
-  THERMOSTAT_HYSTERESIS_TEST_CHECK(
-      fixture.thermostat().GetConfig().invert_output);
   THERMOSTAT_HYSTERESIS_TEST_CHECK(base.GetConfig().target_c == 23.0f);
   THERMOSTAT_HYSTERESIS_TEST_CHECK(
       fixture.sensor().SetError(TemperatureBase::Status::Disconnected));
@@ -529,7 +525,7 @@ void TestCommonConfigurationAndFaultPrecedence() {
   fixture.thermostat().Update(1001);
   THERMOSTAT_HYSTERESIS_TEST_CHECK(base.GetStatus() == Status::kDisabled);
   THERMOSTAT_HYSTERESIS_TEST_CHECK(!fixture.thermostat().GetState().output);
-  THERMOSTAT_HYSTERESIS_TEST_CHECK(fixture.bit().Get());
+  THERMOSTAT_HYSTERESIS_TEST_CHECK(!fixture.bit().Get());
   ++g_test_group_count;
 }
 
@@ -537,14 +533,14 @@ void TestCommonConfigurationAndFaultPrecedence() {
 
 int main() {
   TestAdapterValidation();
-  TestInitialAndInversion();
+  TestInitialAndAdapterPolarity();
   TestThresholds();
   TestDelaysAndCancellation();
   TestExpiryRechecksInput();
   TestFaultAndRecovery();
   TestStaleAndInvalid();
   TestConfiguration();
-  TestSetpointMemoryAndInversionChange();
+  TestSetpointMemoryAndDisable();
   TestStartup();
   TestRollover();
   TestObservers();

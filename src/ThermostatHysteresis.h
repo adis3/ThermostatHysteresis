@@ -16,7 +16,6 @@ class ThermostatHysteresis final : public ThermostatBase {
     bool initial_output =
         false;  // Applied immediately by a successful Begin().
     bool error_output = false;
-    bool invert_output = false;
   };
 
   struct State {
