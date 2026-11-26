@@ -27,7 +27,7 @@ macro, not a redefinition of assert; their expressions still run with NDEBUG.
 The executable reports 17 behavior groups covering:
 
 - Physical-output/virtual acceptance and input-mode rejection with logging.
-- Initial output, inversion, and repeated initialization.
+- Initial logical output, adapter polarity, and repeated initialization.
 - Heating/cooling threshold equality and zero hysteresis.
 - ON/OFF delays, cancellations, and long-interval pending reversals.
 - Sensor errors, stale/nonfinite readings, immediate fallback, and recovery.
